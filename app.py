@@ -4,7 +4,19 @@ from googleapiclient.discovery import build
 
 # Import core timetable functions
 try:
-    from extract_timetable import extract_batch_colors, get_timetable, get_custom_timetable
+    import extract_timetable
+    extract_batch_colors = extract_timetable.extract_batch_colors
+    get_timetable = extract_timetable.get_timetable
+    
+    # Try to get get_custom_timetable function
+    if hasattr(extract_timetable, 'get_custom_timetable'):
+        get_custom_timetable = extract_timetable.get_custom_timetable
+    else:
+        # Fallback function if not available
+        def get_custom_timetable(spreadsheet, selected_courses):
+            return "⚠️ Custom timetable function not available. Please check the implementation."
+        st.warning("Custom timetable function not found. Using fallback function.")
+        
 except ImportError as e:
     st.error(f"Failed to import timetable functions: {e}")
     st.stop()
