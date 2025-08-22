@@ -1,14 +1,32 @@
 import streamlit as st
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from extract_timetable import extract_batch_colors, get_timetable, get_custom_timetable
-from course_extractor import extract_departments_and_batches, extract_all_courses, search_courses
-from user_preferences import (
-    initialize_session_state, add_course_to_selection, remove_course_from_selection,
-    clear_all_selections, get_selected_courses, update_search_filters, 
-    get_search_filters, save_search_results, get_last_search_results,
-    is_course_selected, get_selection_summary
-)
+
+# Import core timetable functions
+try:
+    from extract_timetable import extract_batch_colors, get_timetable, get_custom_timetable
+except ImportError as e:
+    st.error(f"Failed to import timetable functions: {e}")
+    st.stop()
+
+# Import course extraction functions
+try:
+    from course_extractor import extract_departments_and_batches, extract_all_courses, search_courses
+except ImportError as e:
+    st.error(f"Failed to import course extraction functions: {e}")
+    st.stop()
+
+# Import user preferences functions
+try:
+    from user_preferences import (
+        initialize_session_state, add_course_to_selection, remove_course_from_selection,
+        clear_all_selections, get_selected_courses, update_search_filters, 
+        get_search_filters, save_search_results, get_last_search_results,
+        is_course_selected, get_selection_summary
+    )
+except ImportError as e:
+    st.error(f"Failed to import user preferences functions: {e}")
+    st.stop()
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1cmDXt7UTIKBVXBHhtZ0E4qMnJrRoexl2GmDFfTBl0Z4/edit?usp=drivesdk"
 
