@@ -129,12 +129,6 @@ def parse_course_entry_simple(course_entry: str, batch: str) -> Dict:
     course_name = course_entry
     
     # Look for section patterns like "(CS-E)", "-E", "(E)", etc. - same as original
-    section_patterns = [
-        f"(CS-{chr(65+i)})",  # Pattern like "(CS-A)", "(CS-B)", etc.
-        f"-{chr(65+i)}",      # Pattern like "-A", "-B", etc.
-        f"({chr(65+i)})",     # Pattern like "(A)", "(B)", etc.
-        f" {chr(65+i)} "      # Pattern like " A ", " B " (with spaces)
-    ]
     
     # Check for all possible sections (A-Z)
     for i in range(26):
