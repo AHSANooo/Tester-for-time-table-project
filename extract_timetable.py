@@ -275,3 +275,135 @@ def get_timetable(spreadsheet, user_batch, user_section):
         output.append("\n")
 
     return "\n".join(output) if output else "⚠️ No classes found for selected criteria"
+
+
+def get_custom_timetable(spreadsheet, selected_courses):
+    """Generate timetable for custom selected courses"""
+    if not selected_courses:
+        return "⚠️ No courses selected. Please select courses first."
+    
+    timetable = {}
+    timetable_sheets = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    
+    # Create a set of course identifiers for faster lookup
+    selected_course_ids = set()
+    for course in selected_courses:
+        course_id = f"{course['name']}_{course['department']}_{course['section']}_{course['batch']}"
+        selected_course_ids.add(course_id)
+    
+    for sheet in spreadsheet.get('sheets', []):
+        sheet_name = sheet['properties']['title']
+        if sheet_name not in timetable_sheets:
+            continue
+
+        grid_data = sheet.get('data', [{}])[0].get('rowData', [])
+        if len(grid_data) < 6:
+            continue
+
+        # Find the room column dynamically
+        room_column = find_room_column(grid_data)
+
+        # Extract class timings (Row 5)
+        class_time_row = grid_data[4] if len(grid_data) > 4 else None
+
+        # Detect the correct lab row dynamically
+        lab_time_row_index = None
+        lab_time_row = None
+        
+        for i in range(len(grid_data)):
+            row_values = grid_data[i].get('values', [])
+            if row_values:
+                first_cell_value = row_values[0].get('formattedValue', '').strip()
+                if 'Lab' in first_cell_value:
+                    lab_time_row_index = i
+                    lab_time_row = grid_data[i]
+                    break
+
+        # Process timetable rows (skip headers)
+        for row_idx, row in enumerate(grid_data[5:], start=6):
+            is_lab = lab_time_row_index is not None and row_idx >= lab_time_row_index + 1
+
+            # Extract room number
+            row_values = row.get('values', []) if isinstance(row, dict) else []
+            room = "Unknown"
+            
+            if row_values and len(row_values) > room_column:
+                room_cell = row_values[room_column]
+                if 'formattedValue' in room_cell:
+                    room = room_cell['formattedValue'].strip()
+            
+            # Clean the room data
+            room = clean_room_data(room)
+
+            # Check all cells in row
+            for col_idx, cell in enumerate(row_values):
+                if not isinstance(cell, dict) or 'effectiveFormat' not in cell:
+                    continue
+
+                # Get cell color
+                color = cell.get('effectiveFormat', {}).get('backgroundColor', {})
+                cell_color = f"{color.get('red', 0):.2f}{color.get('green', 0):.2f}{color.get('blue', 0):.2f}"
+
+                class_entry = cell.get('formattedValue', '')
+                if class_entry:
+                    # Try to match this course with selected courses
+                    for selected_course in selected_courses:
+                        # Check if this cell matches the selected course
+                        if matches_selected_course(class_entry, selected_course, cell_color):
+                            # Extract time slot
+                            time_row = lab_time_row if (is_lab and lab_time_row is not None) else class_time_row
+                            time_slot = "Unknown"
+                            if time_row:
+                                time_values = time_row.get('values', [])
+                                if len(time_values) > col_idx:
+                                    time_slot = time_values[col_idx].get('formattedValue', 'Unknown')
+
+                            # Store in dictionary (group by day)
+                            if sheet_name not in timetable:
+                                timetable[sheet_name] = []
+
+                            timetable[sheet_name].append((
+                                parse_time_slot(time_slot), 
+                                time_slot, 
+                                room, 
+                                "Lab" if is_lab else "Class", 
+                                selected_course['name'],
+                                selected_course['section'],
+                                selected_course['batch']
+                            ))
+
+    # Format output as a Markdown table
+    output = []
+    for day, sessions in timetable.items():
+        output.append(f"### 📌 {day}\n")
+        output.append("| Time | Room | Type | Course | Section | Batch |")
+        output.append("|------|------|------|--------|---------|-------|")
+
+        # Sort sessions by extracted start time before displaying
+        for _, time_slot, room, session_type, course, section, batch in sorted(sessions, key=lambda x: x[0]):
+            output.append(f"| {time_slot} | {room} | {session_type} | {course} | {section} | {batch} |")
+        output.append("\n")
+
+    return "\n".join(output) if output else "⚠️ No classes found for selected courses"
+
+def matches_selected_course(class_entry, selected_course, cell_color):
+    """Check if a class entry matches a selected course"""
+    # First check if the course name is in the entry
+    if selected_course['name'].lower() not in class_entry.lower():
+        return False
+    
+    # Check if the section matches
+    section_patterns = [
+        f"(CS-{selected_course['section']})",
+        f"-{selected_course['section']}",
+        f"({selected_course['section']})",
+        f" {selected_course['section']} "
+    ]
+    
+    section_match = any(pattern in class_entry for pattern in section_patterns)
+    if not section_match:
+        return False
+    
+    # For now, we'll assume the batch color matches if the course name and section match
+    # This could be enhanced to also check batch color if needed
+    return True
