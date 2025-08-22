@@ -23,7 +23,7 @@ except ImportError as e:
 
 # Import course extraction functions
 try:
-    from course_extractor import extract_departments_and_batches, extract_all_courses, search_courses
+    from course_extractor_simple import extract_departments_and_batches_simple as extract_departments_and_batches, extract_all_courses_simple as extract_all_courses, search_courses_simple as search_courses
 except ImportError as e:
     st.error(f"Failed to import course extraction functions: {e}")
     st.stop()
