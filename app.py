@@ -154,11 +154,17 @@ def main():
                                        placeholder="Enter course name...")
 
         with col2:
+            # Safely compute the initial index for department selectbox — avoid ValueError if session value not present
+            dept_index = 0
+            if st.session_state.selected_department:
+                try:
+                    dept_index = department_list.index(st.session_state.selected_department) + 1
+                except ValueError:
+                    dept_index = 0
+
             selected_department = st.selectbox("🏢 Department",
                                              [""] + department_list,
-                                             index=0 if not st.session_state.selected_department else (
-                                                 department_list.index(st.session_state.selected_department) + 1
-                                             ))
+                                             index=dept_index)
 
         with col3:
             # Decide initial index based on previous selection which might be a full batch or a year
