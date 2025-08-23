@@ -237,7 +237,7 @@ def main():
             if search_triggered:
                 st.info("No courses found matching your criteria.")
             else:
-                st.write("Press '🔎 Search Courses' to run the search and display results.")
+                st.write("Press '🔎 Search Courses' to display results.")
         
         # Selected courses section
         selected_courses = get_selected_courses()
