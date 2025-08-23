@@ -165,20 +165,28 @@ def main():
                                              index=0 if not st.session_state.selected_department else 
                                                    department_list.index(st.session_state.selected_department) + 1)
         
-        # Helper to extract a 4-digit year for display (falls back to full string)
-        def _batch_year_label(opt):
-            if not opt:
-                return ""
-            m = re.search(r"(20\d{2})", str(opt))
-            return m.group(1) if m else str(opt)
+        # Build a unique list of years (no repetition) from batch labels and map year -> a representative full batch
+        year_to_batch = {}
+        year_list = []
+        for b in batch_list:
+            m = re.search(r"(20\d{2})", str(b))
+            if m:
+                y = m.group(1)
+                if y not in year_to_batch:
+                    year_to_batch[y] = b
+                    year_list.append(y)
+
+        year_list = sorted(year_list)
 
         with col3:
-            # Use format_func to show only the year while option values remain full batch strings
-            selected_batch = st.selectbox("👥 Batch", 
-                                        [""] + batch_list,
-                                        index=0 if not st.session_state.selected_batch else 
-                                              batch_list.index(st.session_state.selected_batch) + 1,
-                                        format_func=_batch_year_label)
+            # Show only years in the dropdown; store the selected year, then map back to full batch when updating filters
+            selected_year = st.selectbox("👥 Batch", [""] + year_list,
+                                         index=0 if not st.session_state.selected_batch else (
+                                             ( [""] + year_list ).index(st.session_state.selected_batch) if st.session_state.selected_batch in ( [""] + year_list ) else 0
+                                         ))
+
+            # Map selected_year back to full batch string for filtering
+            selected_batch = year_to_batch.get(selected_year, "") if selected_year else ""
         
         # Update search filters
         update_search_filters(search_query, selected_department, selected_batch)
