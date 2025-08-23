@@ -1,6 +1,7 @@
 import streamlit as st
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+import re
 
 # Import core timetable functions
 try:
@@ -121,10 +122,31 @@ def main():
         st.header("🔍 Custom Course Selection")
         st.write("Search and select individual courses to create your custom timetable.")
         
-        # Extract departments and batches for filters
-        departments, batches = extract_departments_and_batches(spreadsheet)
-        department_list = sorted(list(departments)) if departments else []
-        batch_list = sorted(list(batches)) if batches else []
+        # Reuse the batch info already extracted for the Batch Timetable tab
+        # batch_colors is a dict color_hex -> batch_string extracted earlier
+        unique_batches = sorted(set(batch_colors.values())) if batch_colors else []
+
+        # Derive departments from batch strings (robust to formats like 'BS-CS-1' or 'BS CS (2025)')
+        departments_set = set()
+        for b in unique_batches:
+            dept = ""
+            if '-' in b:
+                parts = b.split('-')
+                if len(parts) >= 2:
+                    dept = parts[1]
+            else:
+                # Find uppercase tokens like CS, EE, DS etc., ignore 'BS'
+                tokens = re.findall(r"\b[A-Z]{2,4}\b", b)
+                for t in tokens:
+                    if t != 'BS':
+                        dept = t
+                        break
+
+            if dept:
+                departments_set.add(dept)
+
+        department_list = sorted(list(departments_set))
+        batch_list = unique_batches
         
         # Extract all courses for search
         all_courses = extract_all_courses(spreadsheet)
