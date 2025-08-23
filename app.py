@@ -165,43 +165,50 @@ def main():
                                              index=0 if not st.session_state.selected_department else 
                                                    department_list.index(st.session_state.selected_department) + 1)
         
-        # Build a unique list of years (no repetition) from batch labels and map year -> a representative full batch
-        year_to_batch = {}
+        # Build a unique list of years (no repetition) from batch labels and map year -> list of full batches
+        year_to_batches = {}
         year_list = []
         for b in batch_list:
             m = re.search(r"(20\d{2})", str(b))
             if m:
                 y = m.group(1)
-                if y not in year_to_batch:
-                    year_to_batch[y] = b
+                year_to_batches.setdefault(y, []).append(b)
+                if y not in year_list:
                     year_list.append(y)
 
         year_list = sorted(year_list)
 
         with col3:
-            # Decide initial index based on the year contained in any previously selected full batch string
+            # Decide initial index based on previous selection which might be a full batch or a year
             initial_index = 0
             if st.session_state.selected_batch:
+                # If session stored a full batch, extract its year; if it already stored a year, use it
                 m_prev = re.search(r"(20\d{2})", str(st.session_state.selected_batch))
-                if m_prev:
-                    prev_year = m_prev.group(1)
-                    if prev_year in year_list:
-                        initial_index = ( [""] + year_list ).index(prev_year)
+                prev_year = m_prev.group(1) if m_prev else str(st.session_state.selected_batch)
+                if prev_year in year_list:
+                    initial_index = ([""] + year_list).index(prev_year)
 
-            # Show only years in the dropdown; store the selected year, then map back to full batch when updating filters
+            # Show only years in the dropdown; selected_year holds the year string (e.g., '2025')
             selected_year = st.selectbox("👥 Batch", [""] + year_list, index=initial_index)
 
-            # Map selected_year back to full batch string for filtering
-            selected_batch = year_to_batch.get(selected_year, "") if selected_year else ""
+            # For filtering we'll later map selected_year -> list of batches via year_to_batches
+            selected_batch = selected_year or ""
         
-        # Update search filters
+        # Update search filters (store selected_year in session state's selected_batch for persistence)
         update_search_filters(search_query, selected_department, selected_batch)
-        
-        # Search courses — if no filters provided, show all courses by default
-        if search_query or selected_department or selected_batch:
-            search_results = search_courses(all_courses, search_query, selected_department, selected_batch)
+
+        # Search courses — first apply query + department using shared search function, then apply year-based filtering
+        if search_query or selected_department:
+            filtered = search_courses(all_courses, search_query, selected_department, "")
         else:
-            search_results = all_courses
+            filtered = all_courses
+
+        # If a year is selected, further filter courses whose 'batch' contains that year
+        if selected_batch:
+            year = selected_batch
+            search_results = [c for c in filtered if year in str(c.get('batch', ''))]
+        else:
+            search_results = filtered
 
         save_search_results(search_results)
 
