@@ -200,7 +200,8 @@ def main():
         save_search_results(search_results)
 
         if search_results:
-            st.subheader(f"📋 Search Results ({len(search_results)} courses found)")
+            # Show a fixed display label as requested
+            st.subheader(f"📋 Search Results ({len(search_results)} records found)")
 
             # Display search results
             for course in search_results:
@@ -246,17 +247,20 @@ def main():
                         remove_course_from_selection(course)
                         st.rerun()
             
-            # Clear all and show timetable buttons
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🗑️ Clear All Selections"):
+            # Small Clear All button on the left and a centered Show Custom Timetable button below it
+            c1, c2 = st.columns([1, 3])
+            with c1:
+                # use a smaller button by adding a compact label and container
+                if st.button("🗑️ Clear", key="clear_small"):
                     clear_all_selections()
                     st.rerun()
-            
-            with col2:
+
+            # Centered Show Timetable button on its own row
+            st.write("")
+            center_col1, center_col2, center_col3 = st.columns([1, 2, 1])
+            with center_col2:
                 if st.button("📅 Show Custom Timetable", key="custom_timetable_btn"):
                     schedule = get_custom_timetable(spreadsheet, selected_courses)
-                    
                     if schedule.startswith("⚠️"):
                         st.error(schedule)
                     else:
