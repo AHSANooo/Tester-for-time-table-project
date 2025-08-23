@@ -366,15 +366,19 @@ def get_custom_timetable(spreadsheet, selected_courses):
                             if sheet_name not in timetable:
                                 timetable[sheet_name] = []
 
-                            timetable[sheet_name].append((
-                                parse_time_slot(time_slot), 
-                                time_slot, 
-                                room, 
-                                "Lab" if is_lab else "Class", 
+                            entry = (
+                                parse_time_slot(time_slot),
+                                time_slot,
+                                room,
+                                "Lab" if is_lab else "Class",
                                 selected_course['name'],
                                 selected_course['section'],
                                 selected_course['batch']
-                            ))
+                            )
+
+                            # Avoid adding exact duplicate entries (same time, room, type, course, section, batch)
+                            if entry not in timetable[sheet_name]:
+                                timetable[sheet_name].append(entry)
 
     # Format output as a Markdown table
     output = []
