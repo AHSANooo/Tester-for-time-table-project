@@ -123,6 +123,13 @@ def parse_course_entry_simple(course_entry: str, batch: str) -> Dict:
         parts = batch.split('-')
         if len(parts) >= 2:
             department = parts[1]
+    else:
+        # Handle space-separated formats like 'BS CS (2025)'
+        tokens = re.findall(r"\b[A-Z]{2,4}\b", batch)
+        for t in tokens:
+            if t != 'BS':
+                department = t
+                break
     
     # Extract section from course entry using the same patterns as original
     section = ""
