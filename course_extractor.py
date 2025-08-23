@@ -1,5 +1,5 @@
 from typing import List, Dict, Set, Tuple
-import re
+
 
 def extract_departments_and_batches(spreadsheet) -> Tuple[Set[str], Set[str]]:
     """Extract unique departments and batches from the first 4 rows of all sheets"""
