@@ -121,50 +121,17 @@ def main():
     with tab2:
         st.header("🔍 Custom Course Selection")
         st.write("Search and select individual courses to create your custom timetable.")
-        
+
         # Reuse the batch info already extracted for the Batch Timetable tab
-        # batch_colors is a dict color_hex -> batch_string extracted earlier
         unique_batches = sorted(set(batch_colors.values())) if batch_colors else []
-
-        # Derive departments from batch strings (robust to formats like 'BS-CS-1' or 'BS CS (2025)')
-        departments_set = set()
-        for b in unique_batches:
-            dept = ""
-            if '-' in b:
-                parts = b.split('-')
-                if len(parts) >= 2:
-                    dept = parts[1]
-            else:
-                # Find uppercase tokens like CS, EE, DS etc., ignore 'BS'
-                tokens = re.findall(r"\b[A-Z]{2,4}\b", b)
-                for t in tokens:
-                    if t != 'BS':
-                        dept = t
-                        break
-
-            if dept:
-                departments_set.add(dept)
-
-        department_list = sorted(list(departments_set))
         batch_list = unique_batches
-        
+
         # Extract all courses for search
         all_courses = extract_all_courses(spreadsheet)
-        
-        # Search and filter section
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            search_query = st.text_input("🔍 Search courses", 
-                                       value=st.session_state.search_query,
-                                       placeholder="Enter course name...")
-        
-        with col2:
-            selected_department = st.selectbox("🏢 Department", 
-                                             [""] + department_list,
-                                             index=0 if not st.session_state.selected_department else 
-                                                   department_list.index(st.session_state.selected_department) + 1)
-        
+
+        # Derive departments directly from extracted courses to guarantee exact matches
+        department_list = sorted(set(c.get('department', '') for c in all_courses if c.get('department')))
+
         # Build a unique list of years (no repetition) from batch labels and map year -> list of full batches
         year_to_batches = {}
         year_list = []
@@ -178,11 +145,25 @@ def main():
 
         year_list = sorted(year_list)
 
+        # Search and filter section
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            search_query = st.text_input("🔍 Search courses",
+                                       value=st.session_state.search_query,
+                                       placeholder="Enter course name...")
+
+        with col2:
+            selected_department = st.selectbox("🏢 Department",
+                                             [""] + department_list,
+                                             index=0 if not st.session_state.selected_department else (
+                                                 department_list.index(st.session_state.selected_department) + 1
+                                             ))
+
         with col3:
             # Decide initial index based on previous selection which might be a full batch or a year
             initial_index = 0
             if st.session_state.selected_batch:
-                # If session stored a full batch, extract its year; if it already stored a year, use it
                 m_prev = re.search(r"(20\d{2})", str(st.session_state.selected_batch))
                 prev_year = m_prev.group(1) if m_prev else str(st.session_state.selected_batch)
                 if prev_year in year_list:
@@ -193,7 +174,7 @@ def main():
 
             # For filtering we'll later map selected_year -> list of batches via year_to_batches
             selected_batch = selected_year or ""
-        
+
         # Update search filters (store selected_year in session state's selected_batch for persistence)
         update_search_filters(search_query, selected_department, selected_batch)
 
@@ -217,12 +198,12 @@ def main():
 
             # Display search results
             for course in search_results:
-                col1, col2, col3 = st.columns([3, 1, 1])
+                c1, c2, c3 = st.columns([3, 1, 1])
 
-                with col1:
+                with c1:
                     st.write(f"**{course['name']}** - {course['department']} - Section {course['section']} - {course['batch']}")
 
-                with col2:
+                with c2:
                     if is_course_selected(course):
                         st.write("✅ Selected")
                     else:
@@ -230,7 +211,7 @@ def main():
                             add_course_to_selection(course)
                             st.rerun()
 
-                with col3:
+                with c3:
                     if is_course_selected(course):
                         if st.button("❌ Remove", key=f"remove_{course['name']}_{course['section']}_{course['batch']}"):
                             remove_course_from_selection(course)
