@@ -291,6 +291,9 @@ def get_custom_timetable(spreadsheet, selected_courses):
         course_id = f"{course['name']}_{course['department']}_{course['section']}_{course['batch']}"
         selected_course_ids.add(course_id)
     
+    # Precompute batch color mapping so we can validate the batch for each cell
+    batch_colors = extract_batch_colors(spreadsheet)
+
     for sheet in spreadsheet.get('sheets', []):
         sheet_name = sheet['properties']['title']
         if sheet_name not in timetable_sheets:
@@ -348,8 +351,8 @@ def get_custom_timetable(spreadsheet, selected_courses):
                 if class_entry:
                     # Try to match this course with selected courses
                     for selected_course in selected_courses:
-                        # Check if this cell matches the selected course
-                        if matches_selected_course(class_entry, selected_course, cell_color):
+                        # Check if this cell matches the selected course (including batch validation)
+                        if matches_selected_course(class_entry, selected_course, cell_color, batch_colors):
                             # Extract time slot
                             time_row = lab_time_row if (is_lab and lab_time_row is not None) else class_time_row
                             time_slot = "Unknown"
@@ -386,7 +389,7 @@ def get_custom_timetable(spreadsheet, selected_courses):
 
     return "\n".join(output) if output else "⚠️ No classes found for selected courses"
 
-def matches_selected_course(class_entry, selected_course, cell_color):
+def matches_selected_course(class_entry, selected_course, cell_color, batch_colors):
     """Check if a class entry matches a selected course"""
     # First check if the course name is in the entry
     if selected_course['name'].lower() not in class_entry.lower():
@@ -403,7 +406,21 @@ def matches_selected_course(class_entry, selected_course, cell_color):
     section_match = any(pattern in class_entry for pattern in section_patterns)
     if not section_match:
         return False
-    
-    # For now, we'll assume the batch color matches if the course name and section match
-    # This could be enhanced to also check batch color if needed
+
+    # Validate batch: map cell_color to a batch string (if available) and ensure it corresponds
+    # to the selected course's batch (exact match) or at least the same year.
+    batch_from_color = batch_colors.get(cell_color, "") if batch_colors else ""
+    selected_batch = selected_course.get('batch', '')
+
+    if batch_from_color and selected_batch:
+        if batch_from_color == selected_batch:
+            return True
+        # Fallback: compare year tokens
+        y1 = re.search(r"(20\d{2})", batch_from_color)
+        y2 = re.search(r"(20\d{2})", selected_batch)
+        if y1 and y2 and y1.group(1) == y2.group(1):
+            return True
+        return False
+
+    # If we don't have batch info, fall back to name/section matching
     return True
