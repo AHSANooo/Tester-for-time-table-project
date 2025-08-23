@@ -1,5 +1,4 @@
 from datetime import datetime
-import re
 
 def extract_batch_colors(spreadsheet):
     """Extract batch-color mappings from spreadsheet"""
