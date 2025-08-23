@@ -165,11 +165,20 @@ def main():
                                              index=0 if not st.session_state.selected_department else 
                                                    department_list.index(st.session_state.selected_department) + 1)
         
+        # Helper to extract a 4-digit year for display (falls back to full string)
+        def _batch_year_label(opt):
+            if not opt:
+                return ""
+            m = re.search(r"(20\d{2})", str(opt))
+            return m.group(1) if m else str(opt)
+
         with col3:
+            # Use format_func to show only the year while option values remain full batch strings
             selected_batch = st.selectbox("👥 Batch", 
                                         [""] + batch_list,
                                         index=0 if not st.session_state.selected_batch else 
-                                              batch_list.index(st.session_state.selected_batch) + 1)
+                                              batch_list.index(st.session_state.selected_batch) + 1,
+                                        format_func=_batch_year_label)
         
         # Update search filters
         update_search_filters(search_query, selected_department, selected_batch)
