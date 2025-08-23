@@ -76,6 +76,43 @@ def clean_room_data(room_text):
     return room_text
 
 
+def normalize_course_name(name: str) -> str:
+    """Normalize course name for comparison: lower-case, remove punctuation and common suffixes like 'lab'."""
+    if not name:
+        return ""
+    s = name.lower().strip()
+    # Remove common enclosing punctuation
+    s = re.sub(r'[\(\)\[\]\.,;:\-]', ' ', s)
+    # Remove common lab/practical words
+    s = re.sub(r'\b(lab|lab session|practical|pract)\b', ' ', s)
+    # Collapse whitespace
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
+
+def is_similar_entry(existing_entry, new_entry) -> bool:
+    """Return True if two timetable entries are effectively duplicates.
+
+    Compares time, room, type, section and batch for equality and then compares
+    normalized course names to allow skipping rows like "Comp Net" vs "Comp Net Lab".
+    """
+    # existing_entry/new_entry: tuples (parse_time, time_slot, room, session_type, course, section, batch)
+    try:
+        _, _, room_e, type_e, course_e, section_e, batch_e = existing_entry
+        _, _, room_n, type_n, course_n, section_n, batch_n = new_entry
+    except Exception:
+        return False
+
+    if room_e != room_n or type_e != type_n or section_e != section_n or batch_e != batch_n:
+        return False
+
+    # If normalized names are equal, treat as duplicate
+    if normalize_course_name(course_e) == normalize_course_name(course_n):
+        return True
+
+    return False
+
+
 def find_room_column(grid_data):
     """Find the column index that contains room information by looking for room-related headers"""
     room_keywords = ['room', 'rooms', 'room no', 'room number', 'location', 'venue']
@@ -376,8 +413,14 @@ def get_custom_timetable(spreadsheet, selected_courses):
                                 selected_course['batch']
                             )
 
-                            # Avoid adding exact duplicate entries (same time, room, type, course, section, batch)
-                            if entry not in timetable[sheet_name]:
+                            # Avoid adding exact or near-duplicate entries (same time, room, type, section, batch
+                            # and similar course name like "Comp Net" vs "Comp Net Lab")
+                            already = False
+                            for existing in timetable[sheet_name]:
+                                if is_similar_entry(existing, entry):
+                                    already = True
+                                    break
+                            if not already:
                                 timetable[sheet_name].append(entry)
 
     # Format output as a Markdown table
