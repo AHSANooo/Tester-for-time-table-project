@@ -1,4 +1,5 @@
 from typing import List, Dict, Set, Tuple
+import re
 
 
 def extract_departments_and_batches(spreadsheet) -> Tuple[Set[str], Set[str]]:
