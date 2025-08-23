@@ -79,8 +79,8 @@ def extract_all_courses_simple(spreadsheet) -> List[Dict]:
         if len(grid_data) < 6:
             continue
 
-        # Process timetable rows (skip headers) - same as original
-        for row_idx, row in enumerate(grid_data[5:], start=6):
+    # Process timetable rows (skip header rows)
+    for row_idx, row in enumerate(grid_data[5:], start=6):
             row_values = row.get('values', []) if isinstance(row, dict) else []
 
             # Check all cells in row - same as original

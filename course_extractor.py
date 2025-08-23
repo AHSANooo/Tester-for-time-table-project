@@ -68,8 +68,8 @@ def extract_all_courses(spreadsheet) -> List[Dict]:
             
         grid_data = sheet.get('data', [{}])[0].get('rowData', [])
         
-        # Process all rows to find courses
-        for row_idx, row in enumerate(grid_data):
+        # Process timetable rows (skip header rows). Start from row index 5 (0-indexed)
+        for row_idx, row in enumerate(grid_data[5:], start=6):
             row_values = row.get('values', []) if isinstance(row, dict) else []
             
             for col_idx, cell in enumerate(row_values):
