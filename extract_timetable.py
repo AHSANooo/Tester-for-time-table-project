@@ -267,13 +267,13 @@ def get_timetable(spreadsheet, user_batch, user_section):
         # Find the room column dynamically
         room_column = find_room_column(grid_data)
 
-    # Extract class timings (Row 5) and build column rank mapping
-    class_time_row, col_rank = build_time_col_rank(grid_data)
+        # Extract class timings (Row 5) and build column rank mapping
+        class_time_row, col_rank = build_time_col_rank(grid_data)
 
         # Detect the correct lab row dynamically by searching for 'Lab' in first column
         lab_time_row_index = None
         lab_time_row = None
-        
+
         # Search through all rows to find the one containing 'Lab' in the first column
         for i in range(len(grid_data)):
             row_values = grid_data[i].get('values', [])
@@ -293,28 +293,28 @@ def get_timetable(spreadsheet, user_batch, user_section):
             # Extract room number from the correct column
             row_values = row.get('values', []) if isinstance(row, dict) else []
             room = "Unknown"
-            
+
             # First try the detected room column
             if row_values and len(row_values) > room_column:
                 room_cell = row_values[room_column]
                 if 'formattedValue' in room_cell:
                     room = room_cell['formattedValue'].strip()
-            
+
             # If room is still unknown or empty, search for room info in other columns
             if not room or room == "Unknown":
                 for col_idx, cell in enumerate(row_values):
                     if col_idx != room_column and 'formattedValue' in cell:
                         cell_value = cell['formattedValue'].strip()
                         # Look for room-like patterns
-                        if (cell_value and 
-                            (cell_value.isdigit() or 
-                             'room' in cell_value.lower() or 
+                        if (cell_value and
+                            (cell_value.isdigit() or
+                             'room' in cell_value.lower() or
                              'lab' in cell_value.lower() or
                              'class' in cell_value.lower() or
                              any(char.isdigit() for char in cell_value))):
                             room = cell_value
                             break
-            
+
             # If still no room found, try to extract from the first non-empty cell
             if not room or room == "Unknown":
                 for cell in row_values:
@@ -325,7 +325,7 @@ def get_timetable(spreadsheet, user_batch, user_section):
                             not any(keyword in potential_room.lower() for keyword in ['cs-', 'bs-', 'semester', 'batch'])):
                             room = potential_room
                             break
-            
+
             # Clean the room data
             room = clean_room_data(room)
 
@@ -351,7 +351,7 @@ def get_timetable(spreadsheet, user_batch, user_section):
                             f" {user_section} "      # Pattern like " E " (with spaces)
                         ]
                         section_match = any(pattern in class_entry for pattern in section_patterns)
-                    
+
                     if class_entry and section_match:
                         # Clean class name - remove section info
                         clean_entry = class_entry
@@ -420,15 +420,15 @@ def get_custom_timetable(spreadsheet, selected_courses):
         if len(grid_data) < 6:
             continue
 
-        # Find the room column dynamically
-        room_column = find_room_column(grid_data)
+    # Find the room column dynamically
+    room_column = find_room_column(grid_data)
 
     # Extract class timings (Row 5) and build column rank mapping
     class_time_row, col_rank = build_time_col_rank(grid_data)
 
-        # Detect the correct lab row dynamically
-        lab_time_row_index = None
-        lab_time_row = None
+    # Detect the correct lab row dynamically
+    lab_time_row_index = None
+    lab_time_row = None
         
         for i in range(len(grid_data)):
             row_values = grid_data[i].get('values', [])
