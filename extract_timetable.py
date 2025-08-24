@@ -150,16 +150,34 @@ def parse_time_slot(time_slot):
     if time_slot == "Unknown":
         return datetime.max  # Place unknown times at the end
 
-    # Handle formats like "08:30-09:50 AM"
-    time_parts = time_slot.split('-')
-    if time_parts:
-        first_time = time_parts[0].strip()  # Extract first time part
-        try:
-            return datetime.strptime(first_time, "%I:%M %p")  # Convert to datetime with AM/PM
-        except ValueError:
-            pass  # Continue if parsing fails
+    # Try to extract the first HH:MM token
+    try:
+        m = re.search(r"(\d{1,2}:\d{2})", str(time_slot))
+        if not m:
+            return datetime.max
 
-    return datetime.max  # Default to max if parsing fails
+        first_time_str = m.group(1)
+
+        # Detect if AM/PM appears anywhere in the slot
+        ampm_match = re.search(r"\b(am|pm|AM|PM)\b", str(time_slot))
+        if ampm_match:
+            # If AM/PM is present, parse using 12-hour format
+            ampm = ampm_match.group(1).upper()
+            try:
+                return datetime.strptime(f"{first_time_str} {ampm}", "%I:%M %p")
+            except ValueError:
+                pass
+
+        # Otherwise, try 24-hour format first, then 12-hour without AM/PM
+        try:
+            return datetime.strptime(first_time_str, "%H:%M")
+        except ValueError:
+            try:
+                return datetime.strptime(first_time_str, "%I:%M")
+            except ValueError:
+                return datetime.max
+    except Exception:
+        return datetime.max
 
 
 def get_timetable(spreadsheet, user_batch, user_section):
