@@ -473,20 +473,56 @@ def matches_selected_course(class_entry, selected_course, cell_color, batch_colo
     if not section_match:
         return False
 
-    # Validate batch: map cell_color to a batch string (if available) and ensure it corresponds
-    # to the selected course's batch (exact match) or at least the same year.
+    # Validate batch and department: map cell_color to a batch string (if available)
+    # and ensure it corresponds to the selected course's batch (exact match).
+    # If exact batch doesn't match, allow same-year only if department also matches.
     batch_from_color = batch_colors.get(cell_color, "") if batch_colors else ""
     selected_batch = selected_course.get('batch', '')
+    selected_dept = selected_course.get('department', '')
 
-    if batch_from_color and selected_batch:
-        if batch_from_color == selected_batch:
+    def extract_dept_from_batch(batch_str: str) -> str:
+        """Extract department token from batch strings like 'BS-CS-1' or 'BS CS (2023)'."""
+        if not batch_str:
+            return ""
+        # Handle dash-separated e.g., BS-CS-1
+        if '-' in batch_str:
+            parts = batch_str.split('-')
+            if len(parts) >= 2:
+                return parts[1]
+        # Otherwise look for 2-4 uppercase tokens
+        tokens = re.findall(r"\b[A-Z]{2,4}\b", batch_str)
+        for t in tokens:
+            if t != 'BS':
+                return t
+        return ""
+
+    # If we have a batch/color mapping, use it to validate department and batch
+    if batch_from_color:
+        dept_from_color = extract_dept_from_batch(batch_from_color)
+        # If department is known from color and doesn't match selected, reject
+        if dept_from_color and selected_dept and dept_from_color != selected_dept:
+            return False
+
+        # If exact batch matches, accept
+        if selected_batch and batch_from_color == selected_batch:
             return True
-        # Fallback: compare year tokens
+
+        # Fallback: allow same-year matching only if department matches (or not provided)
         y1 = re.search(r"(20\d{2})", batch_from_color)
         y2 = re.search(r"(20\d{2})", selected_batch)
         if y1 and y2 and y1.group(1) == y2.group(1):
+            # ensure department alignment if we can
+            if dept_from_color and selected_dept and dept_from_color != selected_dept:
+                return False
             return True
+
         return False
 
-    # If we don't have batch info, fall back to name/section matching
+    # If no batch/color info is available for the cell, require department to appear in the cell entry
+    # to avoid cross-batch matches. This is a conservative fallback.
+    if selected_dept:
+        if selected_dept.lower() not in class_entry.lower():
+            return False
+
+    # If department can't be validated, fall back to name+section match (already checked)
     return True
