@@ -512,9 +512,15 @@ def matches_selected_course(class_entry, selected_course, cell_color, batch_colo
         y2 = re.search(r"(20\d{2})", selected_batch)
         if y1 and y2 and y1.group(1) == y2.group(1):
             # ensure department alignment if we can
-            if dept_from_color and selected_dept and dept_from_color != selected_dept:
-                return False
-            return True
+            if dept_from_color:
+                if selected_dept and dept_from_color != selected_dept:
+                    return False
+                return True
+            else:
+                # No dept info from color; require department token to be present in class entry
+                if selected_dept and selected_dept.lower() not in class_entry.lower():
+                    return False
+                return True
 
         return False
 
