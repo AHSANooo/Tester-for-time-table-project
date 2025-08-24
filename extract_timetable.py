@@ -420,15 +420,15 @@ def get_custom_timetable(spreadsheet, selected_courses):
         if len(grid_data) < 6:
             continue
 
-    # Find the room column dynamically
-    room_column = find_room_column(grid_data)
+        # Find the room column dynamically
+        room_column = find_room_column(grid_data)
 
-    # Extract class timings (Row 5) and build column rank mapping
-    class_time_row, col_rank = build_time_col_rank(grid_data)
+        # Extract class timings (Row 5) and build column rank mapping
+        class_time_row, col_rank = build_time_col_rank(grid_data)
 
-    # Detect the correct lab row dynamically
-    lab_time_row_index = None
-    lab_time_row = None
+        # Detect the correct lab row dynamically
+        lab_time_row_index = None
+        lab_time_row = None
         
         for i in range(len(grid_data)):
             row_values = grid_data[i].get('values', [])
