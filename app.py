@@ -149,9 +149,31 @@ def main():
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            search_query = st.text_input("🔍 Search courses",
-                                       value=st.session_state.search_query,
-                                       placeholder="Enter course name...")
+            # Get filtered courses based on current department and batch selections
+            # This allows the course dropdown to update dynamically
+            current_courses = extract_all_courses(spreadsheet)
+            
+            # Apply department filter if selected
+            if selected_department:
+                current_courses = [c for c in current_courses if c.get('department') == selected_department]
+            
+            # Apply batch/year filter if selected
+            if selected_year:
+                current_courses = [c for c in current_courses if selected_year in str(c.get('batch', ''))]
+            
+            # Create course options for dropdown with the new format: "course_name department section batch"
+            course_options = [""]  # Empty option for no selection
+            course_map = {}  # Map display text to course object
+            
+            for course in current_courses:
+                display_text = f"{course['name']} {course['department']} {course['section']} {course['batch']}"
+                course_options.append(display_text)
+                course_map[display_text] = course
+            
+            selected_course_text = st.selectbox("🔍 Search courses",
+                                               course_options,
+                                               index=0,
+                                               placeholder="Select a course...")
 
         with col2:
             # Safely compute the initial index for department selectbox — avoid ValueError if session value not present
@@ -182,62 +204,36 @@ def main():
             selected_batch = selected_year or ""
 
         # Update search filters (store selected_year in session state's selected_batch for persistence)
-        update_search_filters(search_query, selected_department, selected_batch)
+        update_search_filters("", selected_department, selected_batch)
 
-        # Add an explicit Search button below filters — the results are shown only after user presses it.
-        # If user presses Search, run the search and save results to session state.
-        search_triggered = False
-        if st.button("🔎 Search Courses", key="search_courses_btn"):
-            search_triggered = True
+        # Handle course selection from dropdown
+        selected_course = None
+        if selected_course_text and selected_course_text in course_map:
+            selected_course = course_map[selected_course_text]
 
-            # Search courses — first apply query + department using shared search function, then apply year-based filtering
-            if search_query or selected_department:
-                filtered = search_courses(all_courses, search_query, selected_department, "")
-            else:
-                filtered = all_courses
+        # Show the selected course with add/remove buttons
+        if selected_course:
+            st.subheader("📋 Selected Course")
+            
+            c1, c2, c3 = st.columns([3, 1, 1])
 
-            # If a year is selected, further filter courses whose 'batch' contains that year
-            if selected_batch:
-                year = selected_batch
-                search_results = [c for c in filtered if year in str(c.get('batch', ''))]
-            else:
-                search_results = filtered
+            with c1:
+                # Display with new format: course_name department section batch
+                st.write(f"**{selected_course['name']} {selected_course['department']} {selected_course['section']} {selected_course['batch']}**")
 
-            # Save results so they persist across reruns
-            save_search_results(search_results)
+            with c2:
+                if is_course_selected(selected_course):
+                    st.write("✅ Selected")
+                else:
+                    if st.button("➕ Add", key=f"add_{selected_course['name']}_{selected_course['section']}_{selected_course['batch']}"):
+                        add_course_to_selection(selected_course)
+                        st.rerun()
 
-        # Load last saved search results (if any)
-        search_results = get_last_search_results()
-
-        if search_results:
-            # Show a fixed display label as requested
-            st.subheader(f"📋 Search Results ({len(search_results)} records found)")
-
-            # Display search results
-            for course in search_results:
-                c1, c2, c3 = st.columns([3, 1, 1])
-
-                with c1:
-                    st.write(f"**{course['name']}** - {course['department']} - Section {course['section']} - {course['batch']}")
-
-                with c2:
-                    if is_course_selected(course):
-                        st.write("✅ Selected")
-                    else:
-                        if st.button("➕ Add", key=f"add_{course['name']}_{course['section']}_{course['batch']}"):
-                            add_course_to_selection(course)
-                            st.rerun()
-
-                with c3:
-                    if is_course_selected(course):
-                        if st.button("❌ Remove", key=f"remove_{course['name']}_{course['section']}_{course['batch']}"):
-                            remove_course_from_selection(course)
-                            st.rerun()
-        else:
-            if search_triggered:
-                st.info("No courses found matching your criteria.")
-            else:
-                st.write("")
+            with c3:
+                if is_course_selected(selected_course):
+                    if st.button("❌ Remove", key=f"remove_{selected_course['name']}_{selected_course['section']}_{selected_course['batch']}"):
+                        remove_course_from_selection(selected_course)
+                        st.rerun()
         
         # Selected courses section
         selected_courses = get_selected_courses()
@@ -254,7 +250,8 @@ def main():
             for i, course in enumerate(selected_courses):
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    st.write(f"**{course['name']}** - {course['department']} - Section {course['section']} - {course['batch']}")
+                    # Use new format: course_name department section batch
+                    st.write(f"**{course['name']} {course['department']} {course['section']} {course['batch']}**")
                 with col2:
                     if st.button("❌ Remove", key=f"selected_remove_{i}"):
                         remove_course_from_selection(course)
