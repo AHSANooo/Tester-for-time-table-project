@@ -196,18 +196,13 @@ def main():
             # This allows the course dropdown to update dynamically
             current_courses = extract_all_courses(spreadsheet)
             
-            # Debug: Show total courses extracted
-            st.write(f"Debug: Total courses extracted: {len(current_courses)}")
-            
             # Apply department filter if selected
             if selected_department:
                 current_courses = [c for c in current_courses if c.get('department') == selected_department]
-                st.write(f"Debug: After department filter ({selected_department}): {len(current_courses)}")
             
             # Apply batch/year filter if selected
             if selected_year:
                 current_courses = [c for c in current_courses if selected_year in str(c.get('batch', ''))]
-                st.write(f"Debug: After batch filter ({selected_year}): {len(current_courses)}")
             
             # Create course options for dropdown with the new format: "course_name department section batch"
             course_options = ["Select a course..."]  # Clear option message
