@@ -65,6 +65,21 @@ def get_google_sheets_data(sheet_url):
     return spreadsheet
 
 
+def format_course_display(course: dict) -> str:
+    """Return a compact display string for a course: 'name dept section year-or-batch'
+    Example: 'Data St CS A 2024' (falls back to full batch string if year not found)
+    """
+    name = course.get('name', '').strip()
+    dept = course.get('department', '').strip()
+    section = course.get('section', '').strip()
+    batch = str(course.get('batch', '')).strip()
+    # Prefer year (e.g., 2024) when available inside the batch string
+    m = re.search(r"(20\d{2})", batch)
+    year = m.group(1) if m else batch
+    parts = [p for p in [name, dept, section, year] if p]
+    return " ".join(parts)
+
+
 def main():
     st.title("FAST-NUCES FCS Timetable System")
 
@@ -199,7 +214,7 @@ def main():
             course_map = {}  # Map display text to course object
             
             for course in current_courses:
-                display_text = f"{course['name']} {course['department']} {course['section']} {course['batch']}"
+                display_text = format_course_display(course)
                 course_options.append(display_text)
                 course_map[display_text] = course
             
@@ -222,8 +237,8 @@ def main():
             c1, c2, c3 = st.columns([3, 1, 1])
 
             with c1:
-                # Display with new format: course_name department section batch
-                st.write(f"**{selected_course['name']} {selected_course['department']} {selected_course['section']} {selected_course['batch']}**")
+                # Display compact course string
+                st.write(f"**{format_course_display(selected_course)}**")
 
             with c2:
                 if is_course_selected(selected_course):
@@ -254,8 +269,8 @@ def main():
             for i, course in enumerate(selected_courses):
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    # Use new format: course_name department section batch
-                    st.write(f"**{course['name']} {course['department']} {course['section']} {course['batch']}**")
+                    # Use compact format for selected courses list
+                    st.write(f"**{format_course_display(course)}**")
                 with col2:
                     if st.button("❌ Remove", key=f"selected_remove_{i}"):
                         remove_course_from_selection(course)
