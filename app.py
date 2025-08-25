@@ -177,30 +177,37 @@ def main():
             selected_batch = selected_year or ""
 
         with col1:
-            # Get filtered courses based on current department and batch selections
-            # This allows the course dropdown to update dynamically
-            current_courses = extract_all_courses(spreadsheet)
-            
+            # Use the pre-extracted all_courses (avoids re-calling extractor and timing issues)
+            current_courses = all_courses.copy() if all_courses else []
+
             # Apply department filter if selected
             if selected_department:
                 current_courses = [c for c in current_courses if c.get('department') == selected_department]
-            
+
             # Apply batch/year filter if selected
             if selected_year:
                 current_courses = [c for c in current_courses if selected_year in str(c.get('batch', ''))]
-            
+
             # Create course options for dropdown with the new format: "course_name department section batch"
-            course_options = ["Select a course..."]  # Clear option message
-            course_map = {}  # Map display text to course object
-            
+            course_options = ["Select a course..."]
+            course_map = {}
+
             for course in current_courses:
-                display_text = f"{course['name']} {course['department']} {course['section']} {course['batch']}"
-                course_options.append(display_text)
-                course_map[display_text] = course
-            
-            selected_course_text = st.selectbox("🔍 Search courses",
-                                               course_options,
-                                               index=0)
+                # Defensive access in case some parsed courses are missing fields
+                name = course.get('name', '').strip()
+                dept = course.get('department', '').strip()
+                sec = course.get('section', '').strip()
+                batch = str(course.get('batch', '')).strip()
+                display_text = f"{name} {dept} {sec} {batch}".strip()
+                if display_text:
+                    course_options.append(display_text)
+                    course_map[display_text] = course
+
+            # If there are no options besides the placeholder, show an info message
+            if len(course_options) == 1:
+                st.info("No courses found matching your filters. Try selecting a different Department or Batch.")
+
+            selected_course_text = st.selectbox("🔍 Search courses", course_options, index=0)
 
         # Update search filters (store selected_year in session state's selected_batch for persistence)
         update_search_filters("", selected_department, selected_batch)
