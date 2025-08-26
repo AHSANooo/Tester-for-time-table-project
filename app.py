@@ -84,7 +84,7 @@ def main():
     st.title("FAST-NUCES FCS Timetable System")
     
     # Add a version indicator to ensure we're running the latest code
-    st.caption("🔄 Version: 2.0 - Updated Format & Dropdown Interface")
+    st.caption("")
 
     # Initialize session state
     initialize_session_state()
