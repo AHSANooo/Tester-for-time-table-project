@@ -223,34 +223,17 @@ def main():
         # Update search filters (store selected_year in session state's selected_batch for persistence)
         update_search_filters("", selected_department, selected_batch)
 
-        # Handle course selection from dropdown
-        selected_course = None
+        # Handle course selection from dropdown - automatically add to selection
         if selected_course_text and selected_course_text != "Select a course..." and selected_course_text in course_map:
             selected_course = course_map[selected_course_text]
-
-        # Show the selected course with add/remove buttons
-        if selected_course:
-            st.subheader("📋 Selected Course")
             
-            c1, c2, c3 = st.columns([3, 1, 1])
-
-            with c1:
-                # Display compact course string
-                st.write(f"**{format_course_display(selected_course)}**")
-
-            with c2:
-                if is_course_selected(selected_course):
-                    st.write("✅ Selected")
-                else:
-                    if st.button("➕ Add", key=f"add_{selected_course['name']}_{selected_course['section']}_{selected_course['batch']}"):
-                        add_course_to_selection(selected_course)
-                        st.rerun()
-
-            with c3:
-                if is_course_selected(selected_course):
-                    if st.button("❌ Remove", key=f"remove_{selected_course['name']}_{selected_course['section']}_{selected_course['batch']}"):
-                        remove_course_from_selection(selected_course)
-                        st.rerun()
+            # Check if course is not already selected, then add it automatically
+            if not is_course_selected(selected_course):
+                add_course_to_selection(selected_course)
+                st.rerun()
+            else:
+                # Show a brief message that it's already selected
+                st.info(f"✅ **{format_course_display(selected_course)}** is already in your selection.")
         
         # Selected courses section
         selected_courses = get_selected_courses()
