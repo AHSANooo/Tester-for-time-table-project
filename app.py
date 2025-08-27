@@ -78,6 +78,8 @@ def initialize_offline_data():
         st.session_state.offline_departments = None
         st.session_state.offline_years = None
         st.session_state.offline_mode_enabled = False
+    # When True, the app will never attempt network calls and will only use cached data
+    st.session_state.force_offline = False
         st.session_state.offline_timestamp = None
 
 
@@ -103,6 +105,17 @@ def load_all_data_for_offline():
         st.session_state.offline_mode_enabled = True
         return True
     
+    # If user explicitly requested 'force offline' mode, do not attempt any network calls
+    if st.session_state.get('force_offline'):
+        # If we already have cached data and it's not expired, enable offline mode
+        if st.session_state.get('offline_data_loaded') and not is_offline_data_expired():
+            OFFLINE_MODE_ACTIVE = True
+            st.session_state.offline_mode_enabled = True
+            return True
+        # Otherwise, we cannot fetch data because network calls are disabled
+        st.error("⚠️ Force-offline mode enabled but no cached data is available. Please disable Force Offline or reload the app while connected to the internet to populate cache.")
+        return False
+
     try:
         # Clear old data if expired
         if is_offline_data_expired():
@@ -230,6 +243,11 @@ def main():
     initialize_offline_data()
 
     # Check if we're in offline mode
+    # Provide user control to force offline-only operation (will prevent network calls)
+    st.write("")
+    force_offline = st.checkbox("🔒 Force Offline (do not attempt network calls)", value=st.session_state.get('force_offline', False))
+    st.session_state.force_offline = force_offline
+
     offline_ready = is_offline_ready()
     
     if offline_ready:
