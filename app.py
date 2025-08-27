@@ -286,6 +286,8 @@ def main():
         # Auto-select batch from filtered list (take first match)
         if filtered_batches:
             batch = filtered_batches[0]  # Auto-select first matching batch
+            if selected_department_tab1 or selected_year_tab1:
+                st.success(f"📋 Auto-selected batch: **{batch}**")
         else:
             batch = ""
             if selected_department_tab1 or selected_year_tab1:
@@ -370,6 +372,10 @@ def main():
         if selected_year:
             current_courses = [c for c in current_courses if selected_year in str(c.get('batch', ''))]
         
+        # Show filter status
+        if selected_department or selected_year:
+            st.info(f"📚 Found {len(current_courses)} courses for {selected_department or 'All Departments'} - {selected_year or 'All Years'}")
+        
         # Create course options for dropdown with the new format: "course_name department section batch"
         course_options = [""]  # Clear option message
         course_map = {}  # Map display text to course object
@@ -390,20 +396,18 @@ def main():
         # Only auto-add when course is actually selected (not empty) and different from current
         if (selected_course_text and 
             selected_course_text != "" and 
-            selected_course_text in course_map and
-            selected_course_text != st.session_state.get('last_selected_course', '')):
+            selected_course_text in course_map):
             
             selected_course = course_map[selected_course_text]
             
             # Check if course is not already selected, then add it automatically
             if not is_course_selected(selected_course):
                 add_course_to_selection(selected_course)
-                st.session_state.last_selected_course = selected_course_text
+                st.success(f"✅ Added **{format_course_display(selected_course)}** to your selection!")
                 st.rerun()
             else:
                 # Show a brief message that it's already selected
                 st.info(f"✅ **{format_course_display(selected_course)}** is already in your selection.")
-                st.session_state.last_selected_course = selected_course_text
         
         # Selected courses section
         selected_courses = get_selected_courses()
