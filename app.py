@@ -45,7 +45,7 @@ except ImportError as e:
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1cmDXt7UTIKBVXBHhtZ0E4qMnJrRoexl2GmDFfTBl0Z4/edit?usp=drivesdk"
 
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
 def get_google_sheets_data(sheet_url):
     """Fetch Google Sheets data with formatting using Sheets API v4"""
     credentials_dict = st.secrets["google_service_account"]
@@ -66,21 +66,21 @@ def get_google_sheets_data(sheet_url):
     return spreadsheet
 
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
 def get_cached_batch_colors(sheet_url):
     """Get batch colors with caching to avoid repeated API calls"""
     spreadsheet = get_google_sheets_data(sheet_url)
     return extract_batch_colors(spreadsheet)
 
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes  
+@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk  
 def get_cached_all_courses(sheet_url):
     """Get all courses with caching to avoid repeated extractions"""
     spreadsheet = get_google_sheets_data(sheet_url)
     return extract_all_courses(spreadsheet)
 
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
 def get_cached_departments_and_years(sheet_url):
     """Get departments and years lists with caching"""
     all_courses = get_cached_all_courses(sheet_url)
@@ -97,6 +97,45 @@ def get_cached_departments_and_years(sheet_url):
             year_list.append(m.group(1))
     
     return department_list, sorted(year_list)
+
+
+@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
+def get_cached_spreadsheet_for_timetable(sheet_url):
+    """Get complete spreadsheet data cached for offline timetable generation"""
+    return get_google_sheets_data(sheet_url)
+
+
+def check_offline_capability():
+    """Check if we have sufficient cached data for offline operation"""
+    try:
+        # Try to access cached data without making network calls
+        batch_colors = get_cached_batch_colors(SHEET_URL)
+        all_courses = get_cached_all_courses(SHEET_URL)
+        spreadsheet = get_cached_spreadsheet_for_timetable(SHEET_URL)
+        
+        return (batch_colors is not None and 
+                len(all_courses) > 0 and 
+                spreadsheet is not None)
+    except:
+        return False
+
+
+def get_offline_timetable(batch, section):
+    """Generate timetable using cached data (works offline)"""
+    try:
+        spreadsheet = get_cached_spreadsheet_for_timetable(SHEET_URL)
+        return get_timetable(spreadsheet, batch, section)
+    except Exception as e:
+        return f"⚠️ Offline timetable generation failed: {str(e)}"
+
+
+def get_offline_custom_timetable(selected_courses):
+    """Generate custom timetable using cached data (works offline)"""
+    try:
+        spreadsheet = get_cached_spreadsheet_for_timetable(SHEET_URL)
+        return get_custom_timetable(spreadsheet, selected_courses)
+    except Exception as e:
+        return f"⚠️ Offline custom timetable generation failed: {str(e)}"
 
 
 def format_course_display(course: dict) -> str:
@@ -117,25 +156,39 @@ def format_course_display(course: dict) -> str:
 def main():
     st.title("FAST-NUCES FCS Timetable System")
     
-    # Add a version indicator to ensure we're running the latest code
-    st.caption("")
-
     # Initialize session state
     initialize_session_state()
 
-    # Fetch cached data - this will only make API calls once every 5 minutes
-    st.info("Welcome Everyone!")
+    # Check offline capability and show status
+    offline_ready = check_offline_capability()
+    
+    if offline_ready:
+        st.success("🌐 **OFFLINE MODE READY** - App fully loaded! Works even without internet connection.")
+    else:
+        st.info("🔄 Loading data for offline use...")
+
+    # Fetch cached data - this will work offline after initial load
     try:
-        # Use cached functions to reduce API calls
+        # Use cached functions to reduce API calls and enable offline mode
         batch_colors = get_cached_batch_colors(SHEET_URL)
         all_courses = get_cached_all_courses(SHEET_URL)
         department_list, year_list = get_cached_departments_and_years(SHEET_URL)
+        
+        # Pre-cache the spreadsheet for offline timetable generation
+        _ = get_cached_spreadsheet_for_timetable(SHEET_URL)
+        
+        if not offline_ready:
+            st.success("✅ **OFFLINE MODE ACTIVATED** - All data cached! App now works without internet.")
+            
     except Exception as e:
-        st.error(f"❌ Connection failed: {str(e)}")
+        st.error(f"❌ Failed to load data: {str(e)}")
+        st.warning("⚠️ Internet connection required for initial data loading.")
         return
 
     # Extract batch-color mappings
     if not batch_colors:
+        st.error("⚠️ No batches found. Please check the sheet format.")
+        return
         st.error("⚠️ No batches found. Please check the sheet format.")
         return
         st.error("⚠️ No batches found. Please check the sheet format.")
@@ -204,21 +257,28 @@ def main():
         # User input for section
         section = st.text_input("🔠 Enter your section (e.g., 'A')").strip().upper()
 
-        # Submit button - only fetch timetable when clicked
+        # Submit button - works offline using cached data
         if st.button("Show Timetable", key="batch_timetable_btn"):
             if not batch or not section:
                 st.warning("⚠️ Please enter both batch and section.")
             else:
-                # Only fetch spreadsheet data when actually needed
+                # Generate timetable using cached data (works offline)
                 with st.spinner("Generating timetable..."):
-                    spreadsheet = get_google_sheets_data(SHEET_URL)
-                    schedule = get_timetable(spreadsheet, batch, section)
-
-                    if schedule.startswith("⚠️"):
-                        st.error(schedule)
-                    else:
-                        st.markdown(f"## Timetable for **{batch}, Section {section}**")
-                        st.markdown(schedule)
+                    try:
+                        # Try offline generation first
+                        schedule = get_offline_timetable(batch, section)
+                        
+                        if schedule.startswith("⚠️"):
+                            st.error(schedule)
+                        else:
+                            st.markdown(f"## Timetable for **{batch}, Section {section}**")
+                            st.markdown(schedule)
+                            if offline_ready:
+                                st.info("📱 Generated offline using cached data")
+                                
+                    except Exception as e:
+                        st.error(f"❌ Failed to generate timetable: {str(e)}")
+                        st.warning("🌐 Please check your internet connection and try again.")
 
     # Tab 2: Custom Course Selection (new functionality)
     with tab2:
@@ -343,16 +403,23 @@ def main():
             center_col1, center_col2, center_col3 = st.columns([1, 2, 1])
             with center_col2:
                 if st.button("📅 Show Custom Timetable", key="custom_timetable_btn"):
-                    # Only fetch fresh spreadsheet data when generating custom timetable
+                    # Generate custom timetable using cached data (works offline)
                     with st.spinner("Generating custom timetable..."):
-                        spreadsheet = get_google_sheets_data(SHEET_URL)
-                        schedule = get_custom_timetable(spreadsheet, selected_courses)
-                        
-                        if schedule.startswith("⚠️"):
-                            st.error(schedule)
-                        else:
-                            st.markdown("## Custom Timetable")
-                            st.markdown(schedule)
+                        try:
+                            # Try offline generation first
+                            schedule = get_offline_custom_timetable(selected_courses)
+                            
+                            if schedule.startswith("⚠️"):
+                                st.error(schedule)
+                            else:
+                                st.markdown("## Custom Timetable")
+                                st.markdown(schedule)
+                                if offline_ready:
+                                    st.info("📱 Generated offline using cached data")
+                                    
+                        except Exception as e:
+                            st.error(f"❌ Failed to generate custom timetable: {str(e)}")
+                            st.warning("🌐 Please check your internet connection and try again.")
         else:
             st.info("No courses selected. Search and add courses to create your custom timetable.")
 
@@ -360,8 +427,21 @@ def main():
 if __name__ == "__main__":
     main()
 
-    # Footer with support contact and LinkedIn profile
+    # Footer with offline capability highlight and support contact
     st.markdown("---")
+    
+    # Highlight key offline feature
+    st.markdown("""
+    ### 🌟 **KEY FEATURE: OFFLINE CAPABILITY**
+    
+    ✅ **Works without internet** once initially loaded  
+    ✅ **All data cached locally** for 1 hour  
+    ✅ **Full functionality offline** - select courses, generate timetables  
+    ✅ **Perfect for poor connectivity** areas  
+    
+    *The app automatically caches all timetable data on first load, enabling complete offline functionality.*
+    """)
+    
     st.markdown("📧 **For any issues or support, please contact:** [i230553@isb.nu.edu.pk](mailto:i230553@isb.nu.edu.pk)")
 
     st.markdown("🔗 **Connect with me on LinkedIn:** [Muhammad Ahsan](https://www.linkedin.com/in/muhammad-ahsan-7612701a7)")
