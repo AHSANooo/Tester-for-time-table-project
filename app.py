@@ -45,7 +45,7 @@ except ImportError as e:
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1cmDXt7UTIKBVXBHhtZ0E4qMnJrRoexl2GmDFfTBl0Z4/edit?usp=drivesdk"
 
 
-@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
+@st.cache_data(ttl=3600)  # Cache for 1 hour in memory
 def get_google_sheets_data(sheet_url):
     """Fetch Google Sheets data with formatting using Sheets API v4"""
     credentials_dict = st.secrets["google_service_account"]
@@ -66,64 +66,90 @@ def get_google_sheets_data(sheet_url):
     return spreadsheet
 
 
-@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
-def get_cached_batch_colors(sheet_url):
-    """Get batch colors with caching to avoid repeated API calls"""
-    spreadsheet = get_google_sheets_data(sheet_url)
-    return extract_batch_colors(spreadsheet)
+def initialize_offline_data():
+    """Initialize and store all data in session state for true offline operation"""
+    if 'offline_data_loaded' not in st.session_state:
+        st.session_state.offline_data_loaded = False
+        st.session_state.offline_spreadsheet = None
+        st.session_state.offline_batch_colors = None
+        st.session_state.offline_all_courses = None
+        st.session_state.offline_departments = None
+        st.session_state.offline_years = None
 
 
-@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk  
-def get_cached_all_courses(sheet_url):
-    """Get all courses with caching to avoid repeated extractions"""
-    spreadsheet = get_google_sheets_data(sheet_url)
-    return extract_all_courses(spreadsheet)
-
-
-@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
-def get_cached_departments_and_years(sheet_url):
-    """Get departments and years lists with caching"""
-    all_courses = get_cached_all_courses(sheet_url)
-    
-    # Extract departments
-    department_list = sorted(set(c.get('department', '') for c in all_courses if c.get('department')))
-    
-    # Extract years from courses
-    year_list = []
-    for course in all_courses:
-        batch = str(course.get('batch', ''))
-        m = re.search(r"(20\d{2})", batch)
-        if m and m.group(1) not in year_list:
-            year_list.append(m.group(1))
-    
-    return department_list, sorted(year_list)
-
-
-@st.cache_data(ttl=3600, persist="disk")  # Cache for 1 hour and persist to disk
-def get_cached_spreadsheet_for_timetable(sheet_url):
-    """Get complete spreadsheet data cached for offline timetable generation"""
-    return get_google_sheets_data(sheet_url)
-
-
-def check_offline_capability():
-    """Check if we have sufficient cached data for offline operation"""
+def load_all_data_for_offline():
+    """Load and store all necessary data in session state for offline use"""
     try:
-        # Try to access cached data without making network calls
-        batch_colors = get_cached_batch_colors(SHEET_URL)
-        all_courses = get_cached_all_courses(SHEET_URL)
-        spreadsheet = get_cached_spreadsheet_for_timetable(SHEET_URL)
+        # Fetch spreadsheet data
+        if st.session_state.offline_spreadsheet is None:
+            st.session_state.offline_spreadsheet = get_google_sheets_data(SHEET_URL)
         
-        return (batch_colors is not None and 
-                len(all_courses) > 0 and 
-                spreadsheet is not None)
-    except:
+        # Extract and store batch colors
+        if st.session_state.offline_batch_colors is None:
+            st.session_state.offline_batch_colors = extract_batch_colors(st.session_state.offline_spreadsheet)
+        
+        # Extract and store all courses
+        if st.session_state.offline_all_courses is None:
+            st.session_state.offline_all_courses = extract_all_courses(st.session_state.offline_spreadsheet)
+        
+        # Extract and store departments and years
+        if st.session_state.offline_departments is None or st.session_state.offline_years is None:
+            all_courses = st.session_state.offline_all_courses
+            
+            # Extract departments
+            department_list = sorted(set(c.get('department', '') for c in all_courses if c.get('department')))
+            
+            # Extract years
+            year_list = []
+            for course in all_courses:
+                batch = str(course.get('batch', ''))
+                m = re.search(r"(20\d{2})", batch)
+                if m and m.group(1) not in year_list:
+                    year_list.append(m.group(1))
+            
+            st.session_state.offline_departments = department_list
+            st.session_state.offline_years = sorted(year_list)
+        
+        # Mark as loaded
+        st.session_state.offline_data_loaded = True
+        return True
+        
+    except Exception as e:
+        st.error(f"Failed to load data for offline use: {str(e)}")
         return False
+
+
+def get_offline_batch_colors():
+    """Get batch colors from session state (works offline)"""
+    return st.session_state.get('offline_batch_colors', {})
+
+
+def get_offline_all_courses():
+    """Get all courses from session state (works offline)"""
+    return st.session_state.get('offline_all_courses', [])
+
+
+def get_offline_departments_and_years():
+    """Get departments and years from session state (works offline)"""
+    departments = st.session_state.get('offline_departments', [])
+    years = st.session_state.get('offline_years', [])
+    return departments, years
+
+
+def is_offline_ready():
+    """Check if app is ready for offline operation"""
+    return (st.session_state.get('offline_data_loaded', False) and
+            st.session_state.get('offline_spreadsheet') is not None and
+            st.session_state.get('offline_batch_colors') is not None and
+            st.session_state.get('offline_all_courses') is not None)
 
 
 def get_offline_timetable(batch, section):
     """Generate timetable using cached data (works offline)"""
     try:
-        spreadsheet = get_cached_spreadsheet_for_timetable(SHEET_URL)
+        spreadsheet = st.session_state.get('offline_spreadsheet')
+        if spreadsheet is None:
+            return "⚠️ Offline data not available. Please reload the page with internet connection."
         return get_timetable(spreadsheet, batch, section)
     except Exception as e:
         return f"⚠️ Offline timetable generation failed: {str(e)}"
@@ -132,7 +158,9 @@ def get_offline_timetable(batch, section):
 def get_offline_custom_timetable(selected_courses):
     """Generate custom timetable using cached data (works offline)"""
     try:
-        spreadsheet = get_cached_spreadsheet_for_timetable(SHEET_URL)
+        spreadsheet = st.session_state.get('offline_spreadsheet')
+        if spreadsheet is None:
+            return "⚠️ Offline data not available. Please reload the page with internet connection."
         return get_custom_timetable(spreadsheet, selected_courses)
     except Exception as e:
         return f"⚠️ Offline custom timetable generation failed: {str(e)}"
@@ -156,43 +184,52 @@ def format_course_display(course: dict) -> str:
 def main():
     st.title("FAST-NUCES FCS Timetable System")
     
-    # Initialize session state
+    # Initialize session state and offline data
     initialize_session_state()
+    initialize_offline_data()
 
-    # Check offline capability and show status
-    offline_ready = check_offline_capability()
+    # Check if we're in offline mode
+    offline_ready = is_offline_ready()
     
     if offline_ready:
-        st.success("🌐 **OFFLINE MODE READY** - App fully loaded! Works even without internet connection.")
+        st.success("🌐 **OFFLINE MODE ACTIVE** - App works without internet!")
+        # Use offline data
+        batch_colors = get_offline_batch_colors()
+        all_courses = get_offline_all_courses()
+        department_list, year_list = get_offline_departments_and_years()
     else:
-        st.info("🔄 Loading data for offline use...")
+        st.info("🔄 Loading data for offline use... (requires internet)")
+        try:
+            # Load all data for offline use
+            if load_all_data_for_offline():
+                st.success("✅ **OFFLINE MODE READY** - App now works without internet!")
+                # Use the newly loaded offline data
+                batch_colors = get_offline_batch_colors()
+                all_courses = get_offline_all_courses()
+                department_list, year_list = get_offline_departments_and_years()
+            else:
+                st.error("❌ Failed to load data for offline use")
+                return
+        except Exception as e:
+            st.error(f"❌ Failed to load data: {str(e)}")
+            st.warning("⚠️ Internet connection required for initial data loading.")
+            return
 
-    # Fetch cached data - this will work offline after initial load
-    try:
-        # Use cached functions to reduce API calls and enable offline mode
-        batch_colors = get_cached_batch_colors(SHEET_URL)
-        all_courses = get_cached_all_courses(SHEET_URL)
-        department_list, year_list = get_cached_departments_and_years(SHEET_URL)
-        
-        # Pre-cache the spreadsheet for offline timetable generation
-        _ = get_cached_spreadsheet_for_timetable(SHEET_URL)
-        
-        if not offline_ready:
-            st.success("✅ **OFFLINE MODE ACTIVATED** - All data cached! App now works without internet.")
-            
-    except Exception as e:
-        st.error(f"❌ Failed to load data: {str(e)}")
-        st.warning("⚠️ Internet connection required for initial data loading.")
-        return
-
-    # Extract batch-color mappings
+    # Validate data
     if not batch_colors:
         st.error("⚠️ No batches found. Please check the sheet format.")
         return
-        st.error("⚠️ No batches found. Please check the sheet format.")
-        return
-        st.error("⚠️ No batches found. Please check the sheet format.")
-        return
+    
+    # Add offline test section for debugging
+    if is_offline_ready():
+        with st.expander("🧪 Test Offline Mode"):
+            st.write("All data loaded in session state:")
+            st.write(f"- Spreadsheet data: {'✅ Loaded' if st.session_state.get('offline_spreadsheet') else '❌ Missing'}")
+            st.write(f"- Batch colors: {len(batch_colors)} batches")
+            st.write(f"- Courses: {len(all_courses)} courses")
+            st.write(f"- Departments: {len(department_list)} departments")
+            st.write(f"- Years: {len(year_list)} years")
+            st.success("🔌 You can now disconnect internet and the app will still work!")
 
     # Create tabs
     tab1, tab2 = st.tabs(["📚 Batch Timetable", "🔍 Custom Course Selection"])
@@ -273,8 +310,8 @@ def main():
                         else:
                             st.markdown(f"## Timetable for **{batch}, Section {section}**")
                             st.markdown(schedule)
-                            if offline_ready:
-                                st.info("📱 Generated offline using cached data")
+                            if is_offline_ready():
+                                st.info("📱 Generated using offline data")
                                 
                     except Exception as e:
                         st.error(f"❌ Failed to generate timetable: {str(e)}")
@@ -414,8 +451,8 @@ def main():
                             else:
                                 st.markdown("## Custom Timetable")
                                 st.markdown(schedule)
-                                if offline_ready:
-                                    st.info("📱 Generated offline using cached data")
+                                if is_offline_ready():
+                                    st.info("📱 Generated using offline data")
                                     
                         except Exception as e:
                             st.error(f"❌ Failed to generate custom timetable: {str(e)}")
