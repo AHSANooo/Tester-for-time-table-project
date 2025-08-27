@@ -208,8 +208,7 @@ def main():
                 current_courses = [c for c in current_courses if selected_year in str(c.get('batch', ''))]
             
             # Create course options for dropdown with the new format: "course_name department section batch"
-            # Use an empty string as the default option so the selectbox starts empty like Dept/Batch filters
-            course_options = [""]
+            course_options = [""]  # Clear option message
             course_map = {}  # Map display text to course object
             
             for course in current_courses:
@@ -224,9 +223,8 @@ def main():
         # Update search filters (store selected_year in session state's selected_batch for persistence)
         update_search_filters("", selected_department, selected_batch)
 
-    # Handle course selection from dropdown - automatically add to selection
-    # Empty string indicates no selection (matching Dept/Batch filters behavior)
-    if selected_course_text and selected_course_text != "" and selected_course_text in course_map:
+        # Handle course selection from dropdown - automatically add to selection
+        if selected_course_text and selected_course_text != "Select a course..." and selected_course_text in course_map:
             selected_course = course_map[selected_course_text]
             
             # Check if course is not already selected, then add it automatically
