@@ -156,11 +156,9 @@ def main():
         if selected_year_tab1:
             filtered_batches = [b for b in filtered_batches if selected_year_tab1 in str(b)]
         
-        # Final batch selection from filtered list
+        # Auto-select batch from filtered list (take first match)
         if filtered_batches:
-            batch = st.selectbox("📚 Select specific batch:",
-                               [""] + filtered_batches,
-                               key="batch_final_tab1")
+            batch = filtered_batches[0]  # Auto-select first matching batch
         else:
             batch = ""
             if selected_department_tab1 or selected_year_tab1:
