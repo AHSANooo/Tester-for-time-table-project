@@ -80,7 +80,7 @@ def initialize_offline_data():
         st.session_state.offline_mode_enabled = False
     # When True, the app will never attempt network calls and will only use cached data
     st.session_state.force_offline = False
-        st.session_state.offline_timestamp = None
+    st.session_state.offline_timestamp = None
 
 
 def is_offline_data_expired():
