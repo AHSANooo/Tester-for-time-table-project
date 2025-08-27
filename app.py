@@ -45,6 +45,7 @@ except ImportError as e:
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1cmDXt7UTIKBVXBHhtZ0E4qMnJrRoexl2GmDFfTBl0Z4/edit?usp=drivesdk"
 
 
+@st.cache_data(ttl=300)  # Cache for 5 minutes to reduce API calls
 def get_google_sheets_data(sheet_url):
     """Fetch Google Sheets data with formatting using Sheets API v4"""
     credentials_dict = st.secrets["google_service_account"]
@@ -63,6 +64,16 @@ def get_google_sheets_data(sheet_url):
     ).execute()
 
     return spreadsheet
+
+
+@st.cache_data(ttl=300)  # Cache processed data for 5 minutes
+def get_processed_data(sheet_url):
+    """Get and process all data needed for both tabs"""
+    spreadsheet = get_google_sheets_data(sheet_url)
+    batch_colors = extract_batch_colors(spreadsheet)
+    all_courses = extract_all_courses(spreadsheet)
+    
+    return spreadsheet, batch_colors, all_courses
 
 
 def format_course_display(course: dict) -> str:
@@ -89,79 +100,91 @@ def main():
     # Initialize session state
     initialize_session_state()
 
-    # Fetch full spreadsheet data
+    # Fetch and process data once with caching for better performance
     st.info("Welcome Everyone!")
     try:
-        spreadsheet = get_google_sheets_data(SHEET_URL)
+        spreadsheet, batch_colors, all_courses = get_processed_data(SHEET_URL)
     except Exception as e:
         st.error(f"❌ Connection failed: {str(e)}")
         return
 
-    # Extract batch-color mappings
-    batch_colors = extract_batch_colors(spreadsheet)
-
     if not batch_colors:
         st.error("⚠️ No batches found. Please check the sheet format.")
         return
+    
+    # Derive departments and years from courses (shared data)
+    department_list = sorted(set(c.get('department', '') for c in all_courses if c.get('department')))
+    unique_batches = sorted(set(batch_colors.values())) if batch_colors else []
+    
+    # Build year list for both tabs
+    year_to_batches = {}
+    year_list = []
+    for b in unique_batches:
+        m = re.search(r"(20\d{2})", str(b))
+        if m:
+            y = m.group(1)
+            year_to_batches.setdefault(y, []).append(b)
+            if y not in year_list:
+                year_list.append(y)
+    year_list = sorted(year_list)
 
     # Create tabs
     tab1, tab2 = st.tabs(["📚 Batch Timetable", "🔍 Custom Course Selection"])
 
-    # Tab 1: Original Batch Timetable (existing functionality)
+    # Tab 1: Batch Timetable (now with dropdown selectors like Tab 2)
     with tab1:
         st.header("📚 Batch Timetable")
         st.write("Select your batch and section to view your timetable.")
         
-        # Dropdown for batch selection
-        batch_list = list(batch_colors.values())
+        # Use same dropdown style as Custom Course Selection
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Department selection for batch timetable
+            selected_batch_dept = st.selectbox("🏢 Department", 
+                                             [""] + department_list, 
+                                             key="batch_dept")
+        
+        with col2:
+            # Year/Batch selection
+            selected_batch_year = st.selectbox("👥 Batch", 
+                                             [""] + year_list, 
+                                             key="batch_year")
+        
+        with col3:
+            # Section selection
+            section = st.selectbox("🔠 Section", 
+                                 [""] + ["A", "B", "C", "D", "E", "F"], 
+                                 key="batch_section")
 
-        with st.expander("✅ **Select Your Batch and Department:**"):
-            batch = st.radio("Select your batch:", batch_list, index=None)
-
-        # User input for section
-        section = st.text_input("🔠 Enter your section (e.g., 'A')").strip().upper()
-
-        # Submit button
-        if st.button("Show Timetable", key="batch_timetable_btn"):
-            if not batch or not section:
-                st.warning("⚠️ Please enter both batch and section.")
-                return
-
-            schedule = get_timetable(spreadsheet, batch, section)
-
-            if schedule.startswith("⚠️"):
-                st.error(schedule)
+        # Auto-generate timetable when all fields are selected
+        if selected_batch_dept and selected_batch_year and section:
+            # Find the matching batch from our batch_colors
+            matching_batch = None
+            for batch in unique_batches:
+                if (selected_batch_year in str(batch) and 
+                    any(selected_batch_dept in course.get('department', '') 
+                        for course in all_courses 
+                        if selected_batch_year in str(course.get('batch', '')))):
+                    matching_batch = batch
+                    break
+            
+            if matching_batch:
+                schedule = get_timetable(spreadsheet, matching_batch, section)
+                if schedule.startswith("⚠️"):
+                    st.error(schedule)
+                else:
+                    st.markdown(f"## Timetable for **{matching_batch}, Section {section}**")
+                    st.markdown(schedule)
             else:
-                st.markdown(f"## Timetable for **{batch}, Section {section}**")
-                st.markdown(schedule)
+                st.warning("⚠️ No matching batch found for the selected department and year.")
+        elif selected_batch_dept or selected_batch_year or section:
+            st.info("Please select department, batch, and section to view the timetable.")
 
-    # Tab 2: Custom Course Selection (new functionality)
+    # Tab 2: Custom Course Selection (reusing pre-extracted data)
     with tab2:
         st.header("🔍 Custom Course Selection")
         st.write("Search and select individual courses to create your custom timetable.")
-
-        # Reuse the batch info already extracted for the Batch Timetable tab
-        unique_batches = sorted(set(batch_colors.values())) if batch_colors else []
-        batch_list = unique_batches
-
-        # Extract all courses for search
-        all_courses = extract_all_courses(spreadsheet)
-
-        # Derive departments directly from extracted courses to guarantee exact matches
-        department_list = sorted(set(c.get('department', '') for c in all_courses if c.get('department')))
-
-        # Build a unique list of years (no repetition) from batch labels and map year -> list of full batches
-        year_to_batches = {}
-        year_list = []
-        for b in batch_list:
-            m = re.search(r"(20\d{2})", str(b))
-            if m:
-                y = m.group(1)
-                year_to_batches.setdefault(y, []).append(b)
-                if y not in year_list:
-                    year_list.append(y)
-
-        year_list = sorted(year_list)
 
         # Filter section - moved above search for better mobile layout
         col1, col2 = st.columns(2)
@@ -197,7 +220,7 @@ def main():
         # Course search section - now appears below filters for better mobile experience
         # Get filtered courses based on current department and batch selections
         # This allows the course dropdown to update dynamically
-        current_courses = extract_all_courses(spreadsheet)
+        current_courses = all_courses.copy()  # Use pre-extracted courses
         
         # Apply department filter if selected
         if selected_department:
@@ -224,7 +247,8 @@ def main():
         update_search_filters("", selected_department, selected_batch)
 
         # Handle course selection from dropdown - automatically add to selection
-        if selected_course_text and selected_course_text != "Select a course..." and selected_course_text in course_map:
+        # Empty string indicates no selection (matching Dept/Batch filters behavior)
+        if selected_course_text and selected_course_text != "" and selected_course_text in course_map:
             selected_course = course_map[selected_course_text]
             
             # Check if course is not already selected, then add it automatically
