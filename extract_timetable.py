@@ -596,29 +596,28 @@ def matches_selected_course(class_entry, selected_course, cell_color, batch_colo
     # Extract base course name for matching (handle group patterns like "(CS, G-1)")
     selected_course_name = selected_course['name']
     
-    # Check if this is a group course (contains patterns like "(CS, G-1)")
+    # Check if this is a group course (contains patterns like "(CS,G-1)" - normalized format)
     import re
-    group_pattern = r'\([A-Z]{2,4},\s*G-\d+\)'
+    group_pattern = r'\([A-Z]{2,4}(?:-[A-Z])?,\s*G-\d+\)'
     entry_has_group = re.search(group_pattern, entry_to_match)
     selected_has_group = re.search(group_pattern, selected_course_name)
     
+    # For group courses, we need special matching logic
     if entry_has_group or selected_has_group:
-        # For group courses, extract the base name for matching
-        if entry_has_group:
-            base_entry_name = re.sub(group_pattern, '', entry_to_match).strip()
-        else:
-            base_entry_name = entry_to_match
+        # Both should have group patterns for a match
+        if entry_has_group and selected_has_group:
+            # Extract base course names (everything before the parentheses)
+            selected_base = selected_course_name.split('(')[0].strip()
+            entry_base = entry_to_match.split('(')[0].strip()
             
-        if selected_has_group:
-            base_selected_name = re.sub(group_pattern, '', selected_course_name).strip()
+            # Check if base course names match
+            if selected_base.lower() != entry_base.lower():
+                return False
         else:
-            base_selected_name = selected_course_name
-            
-        # Match against the base course names
-        if base_selected_name.lower() not in base_entry_name.lower():
+            # If only one has group pattern, no match
             return False
     else:
-        # First check if the course name is in the entry
+        # For non-group courses, check if the course name is in the entry
         if selected_course_name.lower() not in entry_to_match.lower():
             return False
     
@@ -639,20 +638,21 @@ def matches_selected_course(class_entry, selected_course, cell_color, batch_colo
         f" {section} "
     ]
     
-    # For group courses, also check for the group pattern with section
+    # For group courses, we need precise section matching since the format is standardized
     if entry_has_group or selected_has_group:
-        # Group courses might have section info in the cell in different formats
-        # Make section matching more flexible for group courses
-        section_patterns.extend([
-            f"{section}",  # Just the section letter anywhere in the entry
-            rf"\({department}, G-\d+\).*{section}",  # Group pattern followed by section
-            rf"{section}.*\({department}, G-\d+\)"   # Section followed by group pattern
-        ])
-        
-        # For group courses, be more lenient with section matching
-        # Check if section appears anywhere in the class entry
-        section_match = (any(pattern in class_entry for pattern in section_patterns) or 
-                        section in class_entry)
+        # For group courses, check for the specific format in the original cell entry
+        # The actual timetable format is like "Gen AI (CS-A,G-1)"
+        if department and section:
+            # Extract the group number from the selected course
+            group_match = re.search(r'G-(\d+)', selected_course_name)
+            if group_match:
+                group_number = group_match.group(1)
+                group_section_pattern = rf"\({department}-{section},\s*G-{group_number}\)"
+                section_match = re.search(group_section_pattern, class_entry) is not None
+            else:
+                section_match = False
+        else:
+            section_match = False
     else:
         # Use the original class_entry for section matching since patterns might include time info
         section_match = any(pattern in class_entry for pattern in section_patterns)
