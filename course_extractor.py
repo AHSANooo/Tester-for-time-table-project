@@ -125,21 +125,33 @@ def parse_course_entry(course_entry: str, batch: str) -> Dict:
     course_name = course_entry
     
     # Look for section patterns like "(DEPT-E)", "-E", "(E)", etc.
+    # But first handle special cases like "(CS, G-1)" or "(CS, G-2)" 
     dept_from_batch = department if department else "CS"  # Fallback to CS if no department
-    section_patterns = [
-        rf'\({dept_from_batch}-([A-Z])\)',  # Pattern like "(DEPT-E)"
-        r'-([A-Z])\b',      # Pattern like "-E"
-        r'\(([A-Z])\)',     # Pattern like "(E)"
-        r'\s([A-Z])\s'      # Pattern like " E " (with spaces)
-    ]
     
-    for pattern in section_patterns:
-        match = re.search(pattern, course_entry)
-        if match:
-            section = match.group(1)
-            # Remove section info from course name
-            course_name = re.sub(pattern, '', course_name).strip()
-            break
+    # Special handling for group patterns like "(CS, G-1)" or "(CS, G-2)"
+    group_pattern = rf'\({dept_from_batch},\s*G-\d+\)'
+    group_match = re.search(group_pattern, course_entry)
+    if group_match:
+        # For group patterns, extract the base course name without the group info
+        # E.g., "DIP (CS, G-2)" -> "DIP"
+        course_name = re.sub(group_pattern, '', course_entry).strip()
+        section = ""  # Section will be determined from timetable cell content
+    else:
+        # Standard section extraction patterns
+        section_patterns = [
+            rf'\({dept_from_batch}-([A-Z])\)',  # Pattern like "(DEPT-E)"
+            r'-([A-Z])\b',      # Pattern like "-E"
+            r'\(([A-Z])\)',     # Pattern like "(E)"
+            r'\s([A-Z])\s'      # Pattern like " E " (with spaces)
+        ]
+        
+        for pattern in section_patterns:
+            match = re.search(pattern, course_entry)
+            if match:
+                section = match.group(1)
+                # Remove section info from course name
+                course_name = re.sub(pattern, '', course_name).strip()
+                break
     
     # Clean up course name
     course_name = course_name.replace('()', '').strip()
